@@ -1,55 +1,134 @@
 const user = require("../model/userSchema");
+const admin = require("../model/admin");
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
+const ExpressError = require("../utils/errorGenerator.js");
+const { generateAccessToken } = require("../utils/jwt");
 
-const register = async (req, res, next) => {
+const register = async (req, res) => {
   try {
-    let hashedPassword = await bcrypt.hash(req.body.password, 10);
+    let { name, phone, email, permanentAddress, gender, password } = req.body;
+    if (!name || !phone || !email || !permanentAddress || !password) {
+      res.json({
+        status: 501,
+        error: true,
+        success: false,
+        message: "Some of the required fields are missing!!!",
+      });
+    } else {
+      let hashedPassword = await bcrypt.hash(password, 10);
 
-    let createUser = new user({
-      name: req.body.name,
-      phone: req.body.phone,
-      email: req.body.email,
-      permanentaddress: req.body.permanentaddress,
-      gender: req.body.gender,
-      password: hashedPassword,
-    });
+      let createUser = new user({
+        name,
+        phone,
+        email,
+        permanentAddress,
+        gender,
+        password: hashedPassword,
+      });
 
-    await createUser.save();
-
-    res.status(201).send(createUser);
+      await user
+        .create(createUser)
+        .then(() =>
+          res.json({
+            status: 200,
+            error: false,
+            success: true,
+            message: "User Created Successfully...",
+          })
+        )
+        .catch((err) =>
+          res.json({
+            error: true,
+            success: false,
+            message: "An internal server has been caught",
+          })
+        );
+    }
   } catch (err) {
     res.status(400).send("User not created");
   }
 };
 
-const login = async (req, res, next) => {
-  try {
-    var username = req.body.email;
-    var password = req.body.password;
 
-    const foundUser = await user.findOne({
-      email: username,
-    });
-
-    if (!foundUser) throw new Error("User not found");
-
-    const isMatch = await bcrypt.compare(password, foundUser.password);
-
-    if (!isMatch) throw new Error("Sorry! Incorrect email or password");
-
-    const token = jwt.sign({ _id: foundUser._id.toString() }, "roshankumar");
-
-    foundUser.token = token;
-    await foundUser.save();
-
-    res.status(200).send(foundUser);
-  } catch (err) {
-    res.status(500).send("Something went wrong");
+const loginUser = async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return new ExpressError(
+      401,
+      "Either username or password is missing in the request."
+    );
   }
+
+  await user.findOne({ email }).then(async (response) => {
+    const matched = await bcrypt.compare(password, response.password);
+    if (matched) {
+      const token = generateAccessToken({ _id: response._id });
+      res.json({
+        error: false,
+        sucess: true,
+        message: "login user successfully",
+        response,
+        token,
+      });
+    } else {
+      res.json({
+        error: true,
+        sucess: false,
+        message: "Password not match!!!",
+      });
+    }
+  }).catch(err => 
+    res.json (
+      {
+        error: true,
+        success: false,
+        message: "User Not found please check the mail id!!!"
+      }
+    )
+  )
+};
+
+const adminLogin = async (req, res) => {
+  const { email, password, adminKey} = req.body;
+  if (!email || !password || !adminKey) {
+    return new ExpressError(
+      401,
+      "Either username or password is missing in the request."
+    );
+  }
+
+  await admin.findOne({ email }).then(async (response) => {
+    const matched = await bcrypt.compare(password, response.password);
+    const adminKeyMatch = (adminKey === response.adminKey)
+    if (matched & adminKeyMatch) {
+      const token = generateAccessToken({ _id: response._id });
+      res.json({
+        error: false,
+        sucess: true,
+        message: "login user successfully",
+        response,
+        token,
+      });
+    } else {
+      res.json({
+        error: true,
+        sucess: false,
+        message: "Password not match!!!",
+      });
+    }
+  }).catch(err => {
+    res.json (
+      {
+        error: true,
+        success: false,
+        message: "User Not found please check the mail id!!!"
+      }
+    )
+  })
 };
 
 module.exports = {
   register,
-  login,
+  adminLogin,
+  loginUser,
 };

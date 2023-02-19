@@ -1,7 +1,8 @@
-const Products = require("../model/productSchema");
-
-const FindProducts = async (req, res) => {
-  const product = await Products.find();
-  return res.json(product)
-};
-module.exports = FindProducts
+const {postOrder, getOrder, getAllProducts} = require("../controller/orderController")
+const authenticate = require("../middleware")
+const express = require("express")
+const Router = express.Router();
+Router.get("/products", getAllProducts);
+Router.get("/order/products", authenticate.verifyToken, getOrder)
+Router.post("/setOrders", postOrder)
+module.exports = Router
